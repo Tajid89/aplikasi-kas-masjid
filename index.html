@@ -283,15 +283,16 @@
             <div class="space-y-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <h3 class="font-bold text-gray-700 text-sm border-b pb-2">Pengaturan Cetak & Saldo Awal</h3>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">Saldo Awal Tahun Sebelumnya (Rp)</label>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Tahun Laporan (Berfungsi Sbg Arsip)</label>
+                    <input type="text" id="settingTahun" oninput="updateSetting('tahunLaporan', this.value)" placeholder="Contoh: TAHUN 2024-2025" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 font-bold text-blue-700">
+                    <p class="text-[10px] text-gray-500 mt-1">Ketik tahun yang berbeda untuk membuat/membuka arsip tahun lainnya.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Saldo Awal Tahun Tersebut (Rp)</label>
                     <div class="relative">
                         <span class="absolute left-2 top-1.5 text-gray-500 text-sm font-medium">Rp</span>
                         <input type="text" id="settingSaldoAwal" oninput="formatRupiahInput(this); updateSetting('saldoAwal', this.value)" placeholder="0" class="w-full border border-gray-300 rounded pl-8 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 font-semibold text-blue-700">
                     </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">Tahun Laporan</label>
-                    <input type="text" id="settingTahun" oninput="updateSetting('tahunLaporan', this.value)" placeholder="Contoh: TAHUN 2024-2025" class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-700 mb-1">Tempat & Tanggal TTD</label>
@@ -342,6 +343,11 @@
 
         <div class="a4-preview relative group">
             
+            <!-- Dashboard Rekap Container (Ditambahkan) -->
+            <div id="dashboardRekapContainer" class="hidden mb-8">
+                <!-- Akan diisi oleh JavaScript -->
+            </div>
+
             <!-- Headers Laporan -->
             <div class="text-center font-bold text-base leading-snug mb-6 uppercase">
                 <div contenteditable="true" class="hover:bg-gray-100 px-2 rounded outline-none border-b border-transparent focus:border-blue-500">LAPORAN PEMASUKAN</div>
@@ -402,7 +408,8 @@
             tanggalTtd: 'Menongo, ............................',
             namaKetua: '( ........................................ )',
             namaBendahara: '( ........................................ )',
-            saldoAwal: 0
+            saldoAwal: 0,
+            saldoAwalDict: {} // Fitur baru: Menyimpan saldo awal yang berbeda-beda tiap tahun
         };
 
         // Konfigurasi Database Online
@@ -412,13 +419,12 @@
         try {
             // UNTUK GITHUB PAGES: Ganti konfigurasi di bawah ini dengan milik Anda dari Firebase Console
             const myFirebaseConfig = {
-                apiKey: "AIzaSyABniHGrxb6-AdXd-pMD1aBW7cJn_4X5iw",
-                authDomain: "kas-masjid-al-ikhlas-menongo.firebaseapp.com",
-                projectId: "kas-masjid-al-ikhlas-menongo",
-                storageBucket: "kas-masjid-al-ikhlas-menongo.firebasestorage.app",
-                messagingSenderId: "765258274089",
-                appId: "1:765258274089:web:6b2c81eb934439c8c2d338",
-		measurementId: "G-C5CP3NHY1C"
+                apiKey: "API_KEY_ANDA",
+                authDomain: "PROJECT_ID.firebaseapp.com",
+                projectId: "PROJECT_ID",
+                storageBucket: "PROJECT_ID.appspot.com",
+                messagingSenderId: "SENDER_ID",
+                appId: "APP_ID"
             };
             
             // Gunakan config bawaan jika di platform ini, jika tidak (di GitHub) gunakan myFirebaseConfig
@@ -492,7 +498,10 @@
             document.getElementById('settingTanggalTtd').value = settings.tanggalTtd !== 'Menongo, ............................' ? settings.tanggalTtd : '';
             document.getElementById('settingKetua').value = settings.namaKetua !== '( ........................................ )' && settings.namaKetua ? settings.namaKetua.replace(/[()]/g, '').trim() : '';
             document.getElementById('settingBendahara').value = settings.namaBendahara !== '( ........................................ )' && settings.namaBendahara ? settings.namaBendahara.replace(/[()]/g, '').trim() : '';
-            document.getElementById('settingSaldoAwal').value = settings.saldoAwal ? formatRupiah(settings.saldoAwal) : '';
+            
+            // Baca saldo awal spesifik untuk tahun yang sedang aktif
+            let currentSaldo = settings.saldoAwalDict ? (settings.saldoAwalDict[settings.tahunLaporan] || 0) : settings.saldoAwal;
+            document.getElementById('settingSaldoAwal').value = currentSaldo ? formatRupiah(currentSaldo) : '';
             
             document.getElementById('tahunLaporan').textContent = settings.tahunLaporan;
             document.getElementById('tanggalTtd').textContent = settings.tanggalTtd;
@@ -561,9 +570,21 @@
             
             if (key === 'tanggalTtd' && value.trim() === '') finalValue = 'Menongo, ............................';
             if (key === 'tahunLaporan' && value.trim() === '') finalValue = 'TAHUN 2024-2025';
-            if (key === 'saldoAwal') finalValue = parseRupiah(value);
+            
+            if (key === 'saldoAwal') {
+                finalValue = parseRupiah(value);
+                settings.saldoAwalDict = settings.saldoAwalDict || {};
+                settings.saldoAwalDict[settings.tahunLaporan] = finalValue; // Simpan ke tahun spesifik
+                settings.saldoAwal = finalValue; // Fallback lama
+            } else {
+                settings[key] = finalValue;
+            }
 
-            settings[key] = finalValue;
+            // Jika mengganti tahun, update otomatis saldo awal di input & render tabel
+            if (key === 'tahunLaporan') {
+                let currentSaldo = settings.saldoAwalDict ? (settings.saldoAwalDict[finalValue] || 0) : 0;
+                document.getElementById('settingSaldoAwal').value = currentSaldo ? formatRupiah(currentSaldo) : '';
+            }
             
             // Save to cloud
             if (user) {
@@ -637,8 +658,18 @@
         function updateDatalistDonatur() {
             const datalist = document.getElementById('namaDonaturList');
             if(!datalist) return;
-            const uniqueNames = [...new Set(dataDonatur.map(d => d.nama).filter(n => n && n.length > 2))];
+            // Hanya ambil sugesti nama dari data di tahun aktif untuk relevansi
+            const fDonatur = getFilteredData(dataDonatur);
+            const uniqueNames = [...new Set(fDonatur.map(d => d.nama).filter(n => n && n.length > 2))];
             datalist.innerHTML = uniqueNames.map(n => `<option value="${n}">`).join('');
+        }
+
+        // Fungsi Pembantu: Memfilter data berdasarkan tahun arsip aktif
+        function getFilteredData(arr) {
+            return arr.filter(item => {
+                const itemTahun = item.tahunLaporan || 'TAHUN 2024-2025';
+                return itemTahun === settings.tahunLaporan;
+            });
         }
 
         // --- SUBMIT HANDLERS ---
@@ -695,7 +726,8 @@
 
                     const finalData = {
                         ...data,
-                        tanggal: data.tanggalRaw ? data.tanggal : (itemLama ? itemLama.tanggal : '')
+                        tanggal: data.tanggalRaw ? data.tanggal : (itemLama ? itemLama.tanggal : ''),
+                        tahunLaporan: itemLama.tahunLaporan || settings.tahunLaporan
                     };
 
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', tipe, editModeId);
@@ -703,7 +735,8 @@
                     showToast("Data berhasil diperbarui!");
                     window.cancelEdit();
                 } else {
-                    await addDoc(colRef, { createdAt: Date.now(), ...data });
+                    // Tambahkan cap tahunLaporan saat data baru dibuat (Untuk arsip)
+                    await addDoc(colRef, { createdAt: Date.now(), tahunLaporan: settings.tahunLaporan, ...data });
                     showToast("Data ditambahkan ke Cloud!");
                     
                     if (tipe === 'donatur') {
@@ -801,16 +834,21 @@
         window.exportToCSV = function() {
             let csvContent = "data:text/csv;charset=utf-8,";
             
+            const fDonatur = getFilteredData(dataDonatur);
+            const fKotak = getFilteredData(dataKotak);
+            const fPengeluaran = getFilteredData(dataPengeluaran);
+            let saldoAwal = settings.saldoAwalDict ? (settings.saldoAwalDict[settings.tahunLaporan] || 0) : (settings.saldoAwal || 0);
+
             // Header
             csvContent += "===== LAPORAN KEUANGAN MASJID =====\r\n";
             csvContent += `Tahun Laporan:,${settings.tahunLaporan}\r\n`;
-            csvContent += `Saldo Awal:,Rp ${formatRupiah(settings.saldoAwal || 0)}\r\n\r\n`;
+            csvContent += `Saldo Awal:,Rp ${formatRupiah(saldoAwal)}\r\n\r\n`;
 
             // Laporan Donatur
             csvContent += "=== A. LAPORAN PEMASUKAN DONATUR ===\r\n";
             csvContent += "No,Tanggal,Nama,Alamat,Jariyah Kepada,Jumlah (Rp)\r\n";
             let sumDonatur = 0;
-            dataDonatur.forEach((row, i) => {
+            fDonatur.forEach((row, i) => {
                 let nama = `"${row.nama || ''}"`;
                 let alamat = `"${row.alamat || ''}"`;
                 let jariyah = `"${row.jariyah || ''}"`;
@@ -823,7 +861,7 @@
             csvContent += "=== B. LAPORAN KOTAK AMAL & BANK ===\r\n";
             csvContent += "No,Tanggal,Uraian,Sumber,Petugas,Jumlah (Rp)\r\n";
             let sumKotak = 0;
-            dataKotak.forEach((row, i) => {
+            fKotak.forEach((row, i) => {
                 let uraian = `"${row.uraian || ''}"`;
                 let sumber = `"${row.sumber || ''}"`;
                 let petugas = `"${row.petugas || ''}"`;
@@ -836,7 +874,7 @@
             csvContent += "=== C. LAPORAN PENGELUARAN ===\r\n";
             csvContent += "No,Tanggal,Uraian,Kategori,Jumlah (Rp)\r\n";
             let sumPengeluaran = 0;
-            dataPengeluaran.forEach((row, i) => {
+            fPengeluaran.forEach((row, i) => {
                 let uraian = `"${row.uraian || ''}"`;
                 let kategori = `"${row.kategori || ''}"`;
                 csvContent += `${i+1},${row.tanggal || ''},${uraian},${kategori},${row.jumlah}\r\n`;
@@ -846,10 +884,10 @@
 
             // Rekap Akhir
             csvContent += "=== REKAPITULASI AKHIR ===\r\n";
-            csvContent += `Saldo Awal,,Rp ${settings.saldoAwal || 0}\r\n`;
+            csvContent += `Saldo Awal,,Rp ${saldoAwal}\r\n`;
             csvContent += `Total Pemasukan (Donatur + Kotak),,Rp ${sumDonatur + sumKotak}\r\n`;
             csvContent += `Total Pengeluaran,,Rp ${sumPengeluaran}\r\n`;
-            csvContent += `SISA SALDO KAS MASJID,,Rp ${(settings.saldoAwal || 0) + (sumDonatur + sumKotak) - sumPengeluaran}\r\n`;
+            csvContent += `SISA SALDO KAS MASJID,,Rp ${saldoAwal + (sumDonatur + sumKotak) - sumPengeluaran}\r\n`;
 
             // Proses Download File
             var encodedUri = encodeURI(csvContent);
@@ -868,8 +906,14 @@
             tbody.innerHTML = '';
             let total = 0;
             
-            // Ambil filter pencarian
+            // Ambil filter pencarian & filter data berdasarkan tahun aktif
             const searchVal = (document.getElementById('searchInput')?.value || '').toLowerCase();
+            const fDonatur = getFilteredData(dataDonatur);
+            const fKotak = getFilteredData(dataKotak);
+            const fPengeluaran = getFilteredData(dataPengeluaran);
+
+            const dashboardContainer = document.getElementById('dashboardRekapContainer');
+            if (dashboardContainer) dashboardContainer.classList.add('hidden');
 
             if (activeMode === 'donatur') {
                 document.getElementById('colSpanTotal').setAttribute('colspan', '5');
@@ -886,7 +930,7 @@
                     </tr>`;
                 
                 let count = 1;
-                dataDonatur.forEach((item) => {
+                fDonatur.forEach((item) => {
                     // Logika pencarian cerdas
                     if (searchVal && !(
                         (item.nama||'').toLowerCase().includes(searchVal) || 
@@ -922,7 +966,7 @@
                     </tr>`;
                 
                 let count = 1;
-                dataKotak.forEach((item) => {
+                fKotak.forEach((item) => {
                     // Logika pencarian cerdas
                     if (searchVal && !(
                         (item.uraian||'').toLowerCase().includes(searchVal) || 
@@ -957,7 +1001,7 @@
                     </tr>`;
                 
                 let count = 1;
-                dataPengeluaran.forEach((item) => {
+                fPengeluaran.forEach((item) => {
                     // Logika pencarian cerdas
                     if (searchVal && !(
                         (item.uraian||'').toLowerCase().includes(searchVal) || 
@@ -982,30 +1026,32 @@
                         </tr>`;
                 });
             } else if (activeMode === 'rekap') {
+                if (dashboardContainer) dashboardContainer.classList.remove('hidden');
+                
                 document.getElementById('colSpanTotal').setAttribute('colspan', '3');
                 document.getElementById('colSpanTotal').textContent = 'SISA SALDO AKHIR MASJID';
                 document.getElementById('colSpanTtd').setAttribute('colspan', '4');
                 thead.innerHTML = `
-                    <tr class="bg-gray-50">
+                    <tr class="bg-gray-50 border-t-2 border-black">
                         <th style="width: 5%;">NO</th>
-                        <th style="width: 45%;">URAIAN REKAPITULASI</th>
+                        <th style="width: 45%;">URAIAN REKAPITULASI KEUANGAN</th>
                         <th style="width: 25%;">PEMASUKAN (Rp)</th>
                         <th style="width: 25%;">PENGELUARAN (Rp)</th>
                     </tr>`;
                 
                 // Menambahkan Logika Saldo Awal ke Laporan
-                let saldoAwal = settings.saldoAwal || 0;
-                let totalDonatur = dataDonatur.reduce((sum, item) => sum + item.jumlah, 0);
-                let kotakFisik = dataKotak.filter(k => k.sumber !== 'Rekening Bank').reduce((sum, item) => sum + item.jumlah, 0);
-                let kotakBank = dataKotak.filter(k => k.sumber === 'Rekening Bank').reduce((sum, item) => sum + item.jumlah, 0);
+                let saldoAwal = settings.saldoAwalDict ? (settings.saldoAwalDict[settings.tahunLaporan] || 0) : (settings.saldoAwal || 0);
+                let totalDonatur = fDonatur.reduce((sum, item) => sum + item.jumlah, 0);
+                let kotakFisik = fKotak.filter(k => k.sumber !== 'Rekening Bank').reduce((sum, item) => sum + item.jumlah, 0);
+                let kotakBank = fKotak.filter(k => k.sumber === 'Rekening Bank').reduce((sum, item) => sum + item.jumlah, 0);
                 let totalKotak = kotakFisik + kotakBank;
                 let totalPemasukan = totalDonatur + totalKotak;
 
-                let pengBisyaroh = dataPengeluaran.filter(p => p.kategori === 'Bisyaroh').reduce((sum, item) => sum + item.jumlah, 0);
-                let pengPembangunan = dataPengeluaran.filter(p => p.kategori === 'Pembangunan').reduce((sum, item) => sum + item.jumlah, 0);
-                let pengOperasional = dataPengeluaran.filter(p => p.kategori === 'Operasional').reduce((sum, item) => sum + item.jumlah, 0);
-                let pengLainnya = dataPengeluaran.filter(p => p.kategori === 'Lainnya' || !p.kategori).reduce((sum, item) => sum + item.jumlah, 0);
-                let totalPengeluaran = dataPengeluaran.reduce((sum, item) => sum + item.jumlah, 0);
+                let pengBisyaroh = fPengeluaran.filter(p => p.kategori === 'Bisyaroh').reduce((sum, item) => sum + item.jumlah, 0);
+                let pengPembangunan = fPengeluaran.filter(p => p.kategori === 'Pembangunan').reduce((sum, item) => sum + item.jumlah, 0);
+                let pengOperasional = fPengeluaran.filter(p => p.kategori === 'Operasional').reduce((sum, item) => sum + item.jumlah, 0);
+                let pengLainnya = fPengeluaran.filter(p => p.kategori === 'Lainnya' || !p.kategori).reduce((sum, item) => sum + item.jumlah, 0);
+                let totalPengeluaran = fPengeluaran.reduce((sum, item) => sum + item.jumlah, 0);
                 
                 // Kalkulasi Sisa Kas Akhir
                 total = saldoAwal + totalPemasukan - totalPengeluaran; 
@@ -1016,30 +1062,41 @@
                 let pengPct = totalPengeluaran > 0 ? (totalPengeluaran / (baseTotal + totalPengeluaran)) * 100 : 50;
                 if(baseTotal === 0 && totalPengeluaran === 0) { pemPct = 50; pengPct = 50; }
 
+                // Injeksi Dashboard Profesional di luar tabel
+                dashboardContainer.innerHTML = `
+                    <div class="bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm print:border-none print:shadow-none print:p-0 print:bg-transparent">
+                        <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-3 print:border-b-2 print:border-black">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600 print:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                            Visualisasi Arus Kas ${settings.tahunLaporan}
+                        </h3>
+                        <div class="flex flex-col sm:flex-row gap-4 mb-5">
+                            <div class="flex-1 bg-white border border-green-200 rounded-lg p-4 shadow-sm border-l-4 border-l-green-500 print:border print:border-gray-400 print:border-l-4">
+                                <p class="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Total Pemasukan</p>
+                                <p class="text-2xl font-bold text-green-700 print:text-black">Rp ${formatRupiah(baseTotal)}</p>
+                                <p class="text-xs text-gray-400 mt-1">Termasuk saldo awal</p>
+                            </div>
+                            <div class="flex-1 bg-white border border-red-200 rounded-lg p-4 shadow-sm border-l-4 border-l-red-500 print:border print:border-gray-400 print:border-l-4">
+                                <p class="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Total Pengeluaran</p>
+                                <p class="text-2xl font-bold text-red-700 print:text-black">Rp ${formatRupiah(totalPengeluaran)}</p>
+                                <p class="text-xs text-gray-400 mt-1">Seluruh kategori</p>
+                            </div>
+                            <div class="flex-1 bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-sm border-l-4 border-l-blue-600 print:bg-gray-100 print:border print:border-gray-400 print:border-l-4">
+                                <p class="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1 print:text-gray-700">Saldo Kas Tersisa</p>
+                                <p class="text-3xl font-black text-blue-800 print:text-black">Rp ${formatRupiah(total)}</p>
+                            </div>
+                        </div>
+                        <div class="w-full h-8 bg-gray-200 rounded-full overflow-hidden flex border border-gray-300 shadow-inner">
+                            <div class="bg-green-500 h-full flex items-center justify-center text-white text-xs font-bold transition-all print:border-r-2 print:border-white" style="width: ${pemPct}%; min-width: 15%;">KAS MASUK</div>
+                            <div class="bg-red-500 h-full flex items-center justify-center text-white text-xs font-bold transition-all" style="width: ${pengPct}%; min-width: 15%;">KAS KELUAR</div>
+                        </div>
+                    </div>
+                `;
+
                 tbody.innerHTML += `
-                    <!-- Dashboard Visual Chart -->
-                    <tr>
-                        <td colspan="4" class="p-6 bg-white border-b-2 border-gray-300">
-                            <h4 class="font-bold text-center text-gray-800 mb-4 uppercase">Grafik Arus Kas Tahunan</h4>
-                            <div class="flex flex-col sm:flex-row gap-4 mb-3 text-sm">
-                                <div class="flex-1 bg-green-50 border border-green-200 p-3 rounded-lg shadow-sm">
-                                    <p class="text-green-700 font-semibold mb-1">Pemasukan + Saldo Awal</p>
-                                    <p class="text-xl font-bold text-green-800">Rp ${formatRupiah(baseTotal)}</p>
-                                </div>
-                                <div class="flex-1 bg-red-50 border border-red-200 p-3 rounded-lg shadow-sm">
-                                    <p class="text-red-700 font-semibold mb-1">Total Pengeluaran</p>
-                                    <p class="text-xl font-bold text-red-800">Rp ${formatRupiah(totalPengeluaran)}</p>
-                                </div>
-                                <div class="flex-1 bg-blue-50 border border-blue-200 p-3 rounded-lg shadow-sm">
-                                    <p class="text-blue-700 font-semibold mb-1">Saldo Kas Tersisa</p>
-                                    <p class="text-xl font-bold text-blue-800">Rp ${formatRupiah(total)}</p>
-                                </div>
-                            </div>
-                            <div class="w-full h-6 bg-gray-200 flex rounded-full overflow-hidden shadow-inner border border-gray-300">
-                                <div class="bg-green-500 h-full flex items-center justify-center text-white text-xs font-bold transition-all" style="width: ${pemPct}%;">KAS MASUK</div>
-                                <div class="bg-red-500 h-full flex items-center justify-center text-white text-xs font-bold transition-all" style="width: ${pengPct}%;">KAS KELUAR</div>
-                            </div>
-                        </td>
+                    <!-- Rincian Pemasukan -->
+                    <tr class="bg-green-50 print:bg-gray-100">
+                        <td class="text-center font-bold">A</td>
+                        <td colspan="3" class="font-bold text-green-800 print:text-black">RINCIAN PEMASUKAN KAS</td>
                     </tr>
                     
                     <!-- Rincian Pemasukan -->
@@ -1107,10 +1164,10 @@
                         <td class="text-center text-gray-400">-</td>
                         <td class="text-right whitespace-nowrap">${formatRupiah(pengLainnya)}</td>
                     </tr>
-                    <tr class="bg-red-100 font-bold border-t border-red-300">
-                        <td colspan="2" class="text-right text-red-800" style="padding-right: 20px;">TOTAL KESELURUHAN PENGELUARAN (B)</td>
+                    <tr class="bg-red-100 font-bold border-t border-red-300 print:bg-gray-200">
+                        <td colspan="2" class="text-right text-red-800 print:text-black" style="padding-right: 20px;">TOTAL KESELURUHAN PENGELUARAN (B)</td>
                         <td class="text-center text-gray-400">-</td>
-                        <td class="text-right whitespace-nowrap text-red-800">${formatRupiah(totalPengeluaran)}</td>
+                        <td class="text-right whitespace-nowrap text-red-800 print:text-black">${formatRupiah(totalPengeluaran)}</td>
                     </tr>
                 `;
             }
